@@ -1,41 +1,40 @@
-const router = require('express').Router(); // Correctly import Router
-const bcrypt = require('bcrypt');
+const express = require('express');
+const router = express.Router();
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
 const User = require('../models/User');
+
+
+passport.use(new LocalStrategy(User.authenticate()));
+
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+
+router.get('/passport', (req, res) => {
+    if (req.isAuthenticated()) {
+        res.status(200).send("You are already logged in.");
+    } else {
+        res.status(401).json("You need to log in.");
+    }
+});
+
 
 router.post('/register', async (req, res) => {
     try {
-        // Generate salt
-        const salt = await bcrypt.genSalt(10);
+        const { username, email, password } = req.body;
+        const user = new User({ username, email });
+        await User.register(user, password); 
 
-        // Hash the password with the salt
-        const hashedPassword = await bcrypt.hash(req.body.password, salt);
-
-        // Create a new user with the hashed password
-        const newUser = new User({
-            username: req.body.username,
-            email: req.body.emailtype,
-            password: hashedPassword, // Store the hashed password
-        });
-
-        // Save the user to the database
-        const user = await newUser.save();
-
-        // Respond with the user's ID
-        res.status(200).json(user._id);
+        res.status(201).json({ userId: user._id });
     } catch (err) {
-        // Handle errors
-        res.status(500).json({ error: err.message }); // Use `err` for error handling
+        res.status(500).json({ error: err.message });
     }
 });
-router.post("/login",async (req,res)=>{
-    const user= await User.findOne({username : req.body.username});
-    !user && res.status(404).json("wrong user has been requested");
-    
 
-    const validpassword = await bcrypt.compare(req.body.password,user.password);
-    !validpassword && res.status(404).json("wrong password has been enterd");
 
-    res.status(200).json({_id:user._id , username:user.username});
-})
+router.post('/login', passport.authenticate('local'), (req, res) => {
+    res.status(200).json({ userId: req.user._id, username: req.user.username });
+});
 
-module.exports = router; // Export the router
+module.exports = router;
